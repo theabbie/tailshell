@@ -22,7 +22,15 @@ const Page = `<!doctype html>
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Geist","Inter","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 main{max-width:600px;margin:0 auto;padding:56px 20px 80px}
-h1{font-size:20px;font-weight:600;letter-spacing:-.01em;margin:0 0 4px}
+h1{font-size:20px;font-weight:600;letter-spacing:-.01em;margin:0}
+.top{display:flex;align-items:center;justify-content:space-between;margin:0 0 4px}
+.gh{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;font-size:13px;font-weight:500;border:1px solid var(--border);border-radius:6px;padding:5px 10px}
+.gh:hover{color:var(--text);border-color:var(--border-hi)}
+.gh svg{width:16px;height:16px;flex:none}
+.foot{margin-top:28px;text-align:center;font-size:12px;color:var(--subtle)}
+.foot a{color:var(--muted);text-decoration:none;display:inline-flex;align-items:center;gap:4px;vertical-align:bottom}
+.foot a:hover{color:var(--text)}
+.foot svg{width:12px;height:12px}
 .sub{color:var(--muted);margin:0 0 32px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:16px}
 .card h2{font-size:14px;font-weight:600;margin:0 0 4px}
@@ -30,6 +38,8 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.01em;margin:0 0 4px}
 label{display:block;font-size:13px;font-weight:500;margin:14px 0 6px}
 input,textarea,select{width:100%;background:var(--input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:inherit;outline:none}
 input:focus,textarea:focus,select:focus{border-color:var(--border-hi);box-shadow:0 0 0 3px color-mix(in srgb,var(--border-hi) 30%,transparent)}
+select{appearance:none;-webkit-appearance:none;-moz-appearance:none;padding-right:36px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:16px 16px;cursor:pointer}
+@media (prefers-color-scheme: light){select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2352525b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")}}
 textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;resize:vertical}
 .hint{font-size:12px;color:var(--subtle);margin-top:6px}
 button{font:inherit;font-weight:500;border-radius:6px;padding:8px 14px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text)}
@@ -57,7 +67,10 @@ summary{cursor:pointer;color:var(--muted);font-size:13px}
 </head>
 <body>
 <main>
-  <h1>tailshell</h1>
+  <header class="top">
+    <h1>tailshell</h1>
+    <a class="gh" href="https://github.com/theabbie/tailshell" target="_blank" rel="noopener noreferrer" aria-label="tailshell on GitHub"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg><span>GitHub</span></a>
+  </header>
   <p class="sub">Pair an Android phone over your tailnet and get an MCP URL for it.</p>
 
   <div class="card" id="setup-card">
@@ -138,6 +151,7 @@ summary{cursor:pointer;color:var(--muted);font-size:13px}
       <div class="url hide" id="upd-url" style="margin-top:12px"></div>
     </details>
   </div>
+  <footer class="foot">Open source &middot; <a href="https://github.com/theabbie/tailshell" target="_blank" rel="noopener noreferrer">View the code on GitHub <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></footer>
 </main>
 <script>
 (function () {

@@ -13,15 +13,21 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 )
 
-const (
-	binDir   = "/tmp/adbbin"
-	toolsURL = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip"
-)
+func binDir() string { return filepath.Join(os.TempDir(), "tailshell-adb") }
+
+func toolsURL() (string, error) {
+	switch runtime.GOOS {
+	case "linux", "darwin":
+		return "https://dl.google.com/android/repository/platform-tools-latest-" + runtime.GOOS + ".zip", nil
+	}
+	return "", fmt.Errorf("no adb download for %s: install adb and put it on PATH", runtime.GOOS)
+}
 
 var (
 	setupMu sync.Mutex
@@ -34,14 +40,22 @@ func ensureBinary(ctx context.Context) (string, error) {
 	if adbBin != "" {
 		return adbBin, nil
 	}
-	dst := filepath.Join(binDir, "adb")
+	if p, err := exec.LookPath("adb"); err == nil {
+		adbBin = p
+		return p, nil
+	}
+	dst := filepath.Join(binDir(), "adb")
 	if _, err := os.Stat(dst); err == nil {
 		adbBin = dst
 		return dst, nil
 	}
 	dctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(dctx, "GET", toolsURL, nil)
+	url, err := toolsURL()
+	if err != nil {
+		return "", err
+	}
+	req, _ := http.NewRequestWithContext(dctx, "GET", url, nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("download platform-tools: %w", err)
@@ -58,7 +72,7 @@ func ensureBinary(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(binDir, 0o755); err != nil {
+	if err := os.MkdirAll(binDir(), 0o755); err != nil {
 		return "", err
 	}
 	for _, f := range zr.File {
@@ -94,7 +108,7 @@ type env struct {
 func envFor(s *session) env {
 	h := sha256.Sum256(s.Priv)
 	return env{
-		home: "/tmp/adb-" + hex.EncodeToString(h[:8]),
+		home: filepath.Join(os.TempDir(), "tailshell-adb-"+hex.EncodeToString(h[:8])),
 		port: 20000 + int(uint16(h[8])<<8|uint16(h[9]))%20000,
 	}
 }
