@@ -1,0 +1,240 @@
+package web
+
+const Page = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tailshell</title>
+<style>
+:root{
+  --bg:#09090b; --surface:#18181b; --border:#27272a; --border-hi:#3f3f46;
+  --text:#fafafa; --muted:#a1a1aa; --subtle:#71717a; --input:#09090b;
+  --btn:#fafafa; --btn-text:#18181b; --btn-hover:#e4e4e7; --sel:#27272a;
+}
+@media (prefers-color-scheme: light){
+  :root{
+    --bg:#fafafa; --surface:#ffffff; --border:#e4e4e7; --border-hi:#a1a1aa;
+    --text:#09090b; --muted:#52525b; --subtle:#71717a; --input:#fafafa;
+    --btn:#18181b; --btn-text:#fafafa; --btn-hover:#3f3f46; --sel:#f4f4f5;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Geist","Inter","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:600px;margin:0 auto;padding:56px 20px 80px}
+h1{font-size:20px;font-weight:600;letter-spacing:-.01em;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 32px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:16px}
+.card h2{font-size:14px;font-weight:600;margin:0 0 4px}
+.card p{margin:0 0 14px;color:var(--muted);font-size:13px}
+label{display:block;font-size:13px;font-weight:500;margin:14px 0 6px}
+input,textarea,select{width:100%;background:var(--input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:inherit;outline:none}
+input:focus,textarea:focus,select:focus{border-color:var(--border-hi);box-shadow:0 0 0 3px color-mix(in srgb,var(--border-hi) 30%,transparent)}
+textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;resize:vertical}
+.hint{font-size:12px;color:var(--subtle);margin-top:6px}
+button{font:inherit;font-weight:500;border-radius:6px;padding:8px 14px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text)}
+button:hover{border-color:var(--border-hi)}
+button.primary{background:var(--btn);color:var(--btn-text);border-color:var(--btn)}
+button.primary:hover{background:var(--btn-hover);border-color:var(--btn-hover)}
+button:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:8px;align-items:center;margin-top:16px}
+.dev{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:10px 12px;margin:0 0 6px;border:1px solid var(--border);border-radius:6px;background:transparent}
+.dev:hover{border-color:var(--border-hi)}
+.dev.on{border-color:var(--text);background:var(--sel)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;border:1px solid var(--subtle)}
+.dot.up{background:var(--text);border-color:var(--text)}
+.dev .n{font-weight:500}
+.dev .m{color:var(--subtle);font-size:12px;margin-left:auto;font-family:ui-monospace,Menlo,monospace}
+.err{margin-top:12px;padding:8px 10px;border:1px solid var(--border-hi);border-radius:6px;font-size:13px;color:var(--text);white-space:pre-wrap;word-break:break-word}
+.warn{margin-top:12px;font-size:12px;color:var(--muted)}
+.url{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;word-break:break-all;background:var(--input);border:1px solid var(--border);border-radius:6px;padding:10px;user-select:all}
+code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--input);border:1px solid var(--border);border-radius:4px;padding:1px 5px}
+details{margin-top:14px}
+summary{cursor:pointer;color:var(--muted);font-size:13px}
+.hide{display:none}
+.steps{margin:0;padding-left:18px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<main>
+  <h1>tailshell</h1>
+  <p class="sub">Pair an Android phone over your tailnet and get an MCP URL for it.</p>
+
+  <div class="card" id="setup-card">
+    <h2>Server</h2>
+    <p id="setup-msg">Checking&hellip;</p>
+  </div>
+
+  <div class="card" id="join-card">
+    <h2>1. Join your tailnet</h2>
+    <p>Create a one-time auth key in Tailscale (Settings &rarr; Keys). It is sent once to add a node named <code>tailshell</code> to your tailnet and is never stored.</p>
+    <label for="authkey">Tailscale auth key</label>
+    <input id="authkey" type="password" autocomplete="off" spellcheck="false" placeholder="tskey-auth-...">
+    <details>
+      <summary>Already have node state?</summary>
+      <label for="statein">Node state</label>
+      <textarea id="statein" rows="3" spellcheck="false" placeholder="Paste a node state from an earlier run to skip the auth key"></textarea>
+    </details>
+    <div class="row"><button class="primary" id="join">Connect</button><span class="hint" id="join-hint"></span></div>
+    <div class="err hide" id="join-err"></div>
+  </div>
+
+  <div class="card hide" id="dev-card">
+    <h2>2. Choose a device</h2>
+    <p>Machines on your tailnet.</p>
+    <div id="devs"></div>
+    <details>
+      <summary>Node state</summary>
+      <p class="hint" style="margin:8px 0">This is the identity of the node created above. It is already embedded in the MCP URL you will get; keep it private.</p>
+      <textarea id="stateout" rows="3" readonly spellcheck="false"></textarea>
+    </details>
+  </div>
+
+  <div class="card hide" id="pair-card">
+    <h2>3. Pair the phone</h2>
+    <p id="pair-for"></p>
+    <label for="dtype">Device type</label>
+    <select id="dtype"><option value="android">Android phone (wireless debugging)</option><option value="other">Other</option></select>
+    <div id="android-form">
+      <ol class="steps" style="margin-top:12px">
+        <li>On the phone: Settings &rarr; Developer options &rarr; Wireless debugging &rarr; on.</li>
+        <li>Note the <b>IP address &amp; Port</b> on that screen (the connect port).</li>
+        <li>Tap <b>Pair device with pairing code</b> and note its port and code.</li>
+      </ol>
+      <label for="cport">Connect port</label>
+      <input id="cport" inputmode="numeric" placeholder="e.g. 45437">
+      <label for="pport">Pairing port</label>
+      <input id="pport" inputmode="numeric" placeholder="e.g. 34083">
+      <label for="pcode">Pairing code</label>
+      <input id="pcode" inputmode="numeric" autocomplete="off" placeholder="6 digits">
+      <div class="row"><button class="primary" id="pair">Pair and create MCP URL</button><span class="hint" id="pair-hint"></span></div>
+    </div>
+    <p class="hide" id="other-msg" style="margin-top:12px">Only Android phones are supported right now.</p>
+    <div class="err hide" id="pair-err"></div>
+  </div>
+
+  <div class="card hide" id="out-card">
+    <h2>MCP URL</h2>
+    <p>Paste this into ChatGPT as an MCP server URL, with authentication set to none.</p>
+    <div class="url" id="mcpurl"></div>
+    <div class="row"><button id="copy">Copy</button><span class="hint" id="copy-hint"></span></div>
+    <h2 style="margin-top:24px">HTTP API</h2>
+    <p>The same tools over plain HTTP. <code>GET</code> the base URL to list endpoints; <code>/openapi.json</code> is an OpenAPI spec.</p>
+    <div class="url" id="httpurl"></div>
+    <div class="row"><button id="copyhttp">Copy</button><span class="hint" id="copyhttp-hint"></span></div>
+    <p class="warn">Treat these URLs like passwords. They contain the phone's adb key and your tailnet node identity, so anyone who has one can control the phone while it is reachable.</p>
+  </div>
+
+  <div class="card">
+    <details style="margin:0">
+      <summary>Wireless debugging port changed?</summary>
+      <p style="margin-top:10px">Turning wireless debugging off and on changes its port. The pairing stays valid; paste your MCP URL and the new connect port to get an updated URL.</p>
+      <label for="oldurl">Current MCP URL</label>
+      <input id="oldurl" spellcheck="false" autocomplete="off">
+      <label for="newport">New connect port</label>
+      <input id="newport" inputmode="numeric">
+      <div class="row"><button id="upd">Update URL</button><span class="hint" id="upd-hint"></span></div>
+      <div class="err hide" id="upd-err"></div>
+      <div class="url hide" id="upd-url" style="margin-top:12px"></div>
+    </details>
+  </div>
+</main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var state = "", chosen = null;
+
+  function show(id, on) { $(id).classList.toggle("hide", !on); }
+  function err(id, msg) { var e = $(id); e.textContent = msg || ""; show(id, !!msg); }
+  function api(path, body) {
+    return fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || ("HTTP " + r.status)); return j; }); });
+  }
+  function busy(btn, hint, on, msg) { btn.disabled = on; $(hint).textContent = on ? msg : ""; }
+
+  fetch("/api/status").then(function (r) { return r.json(); }).then(function (s) {
+    if (s.sealSecretConfigured) { show("setup-card", false); return; }
+    $("setup-msg").innerHTML = "Not configured. Set the <code>SEAL_SECRET</code> environment variable (a random string, e.g. <code>openssl rand -hex 32</code>) and redeploy.";
+    $("join").disabled = true;
+  }).catch(function () { show("setup-card", false); });
+
+  function renderDevices(list) {
+    var box = $("devs"); box.innerHTML = "";
+    if (!list.length) { box.textContent = "No other devices found on this tailnet."; return; }
+    list.forEach(function (d) {
+      var b = document.createElement("button"); b.className = "dev"; b.type = "button";
+      var dot = document.createElement("span"); dot.className = "dot" + (d.online ? " up" : ""); dot.title = d.online ? "online" : "offline";
+      var n = document.createElement("span"); n.className = "n"; n.textContent = d.name;
+      var m = document.createElement("span"); m.className = "m"; m.textContent = d.os + " · " + (d.ips[0] || "");
+      b.appendChild(dot); b.appendChild(n); b.appendChild(m);
+      b.onclick = function () {
+        chosen = d;
+        Array.prototype.forEach.call(box.children, function (c) { c.classList.remove("on"); });
+        b.classList.add("on");
+        $("pair-for").textContent = d.name + " (" + (d.dnsName || d.ips[0]) + ")";
+        $("dtype").value = d.os === "android" ? "android" : "other";
+        syncType(); show("pair-card", true); show("out-card", false);
+      };
+      box.appendChild(b);
+    });
+  }
+  function syncType() {
+    var android = $("dtype").value === "android";
+    show("android-form", android); show("other-msg", !android);
+  }
+  $("dtype").onchange = syncType;
+
+  $("join").onclick = function () {
+    err("join-err", "");
+    var st = $("statein").value.trim(), key = $("authkey").value.trim();
+    if (!st && !key) { err("join-err", "Enter an auth key or paste node state."); return; }
+    busy($("join"), "join-hint", true, "Joining the tailnet (can take ~10s)…");
+    api("/api/connect", st ? { state: st } : { authKey: key }).then(function (r) {
+      state = r.state; $("authkey").value = ""; $("stateout").value = state;
+      renderDevices(r.devices); show("dev-card", true); show("pair-card", false); show("out-card", false);
+    }).catch(function (e) { err("join-err", e.message); })
+      .then(function () { busy($("join"), "join-hint", false); });
+  };
+
+  $("pair").onclick = function () {
+    err("pair-err", "");
+    if (!chosen) { err("pair-err", "Choose a device first."); return; }
+    var body = {
+      state: state, host: chosen.dnsName || chosen.ips[0],
+      connectPort: parseInt($("cport").value, 10), pairPort: parseInt($("pport").value, 10), code: $("pcode").value.trim()
+    };
+    if (!body.connectPort || !body.pairPort || !body.code) { err("pair-err", "Fill in all three fields."); return; }
+    busy($("pair"), "pair-hint", true, "Pairing…");
+    api("/api/pair", body).then(function (r) {
+      $("mcpurl").textContent = r.url; $("httpurl").textContent = r.httpUrl; show("out-card", true); $("pcode").value = "";
+      if (r.warning) err("pair-err", r.warning);
+      $("out-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }).catch(function (e) { err("pair-err", e.message); })
+      .then(function () { busy($("pair"), "pair-hint", false); });
+  };
+
+  function copier(btn, src, hint) {
+    $(btn).onclick = function () {
+      navigator.clipboard.writeText($(src).textContent).then(function () {
+        $(hint).textContent = "Copied"; setTimeout(function () { $(hint).textContent = ""; }, 1500);
+      });
+    };
+  }
+  copier("copy", "mcpurl", "copy-hint");
+  copier("copyhttp", "httpurl", "copyhttp-hint");
+
+  $("upd").onclick = function () {
+    err("upd-err", ""); show("upd-url", false);
+    var port = parseInt($("newport").value, 10), url = $("oldurl").value.trim();
+    if (!port || !url) { err("upd-err", "Enter the MCP URL and the new port."); return; }
+    busy($("upd"), "upd-hint", true, "Reconnecting…");
+    api("/api/port", { url: url, port: port }).then(function (r) {
+      $("upd-url").textContent = "MCP:  " + r.url + "\nHTTP: " + r.httpUrl; show("upd-url", true);
+    }).catch(function (e) { err("upd-err", e.message); })
+      .then(function () { busy($("upd"), "upd-hint", false); });
+  };
+})();
+</script>
+</body>
+</html>
+`

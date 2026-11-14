@@ -1,0 +1,210 @@
+package adbx
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"strings"
+	"sync"
+	"time"
+)
+
+type DialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
+
+type forwarder struct {
+	mu sync.Mutex
+	m  map[string]string
+}
+
+var fwd = &forwarder{m: map[string]string{}}
+
+func (f *forwarder) local(target string, dial DialFunc) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if l, ok := f.m[target]; ok {
+		return l, nil
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", err
+	}
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				defer cancel()
+				rc, err := dial(ctx, "tcp", target)
+				if err != nil {
+					return
+				}
+				defer rc.Close()
+				done := make(chan struct{}, 2)
+				go func() { io.Copy(rc, c); done <- struct{}{} }()
+				go func() { io.Copy(c, rc); done <- struct{}{} }()
+				<-done
+			}()
+		}
+	}()
+	addr := ln.Addr().String()
+	f.m[target] = addr
+	return addr, nil
+}
+
+func connect(ctx context.Context, e env, dial DialFunc, host string, port int) (string, string, error) {
+	target := fmt.Sprintf("%s:%d", host, port)
+	var dialErr error
+	for i := 0; i < 3; i++ {
+		pctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		c, err := dial(pctx, "tcp", target)
+		cancel()
+		if dialErr = err; err == nil {
+			c.Close()
+			break
+		}
+	}
+	if dialErr != nil {
+		return "", "", fmt.Errorf("cannot reach %s over the tailnet: %v", target, dialErr)
+	}
+	local, err := fwd.local(target, dial)
+	if err != nil {
+		return "", "", err
+	}
+	run(ctx, e, 10*time.Second, "disconnect", local)
+	out, err := run(ctx, e, 30*time.Second, "connect", local)
+	msg := strings.TrimSpace(string(out))
+	if err != nil || !strings.Contains(msg, "connected to") {
+		return "", msg, fmt.Errorf("connect failed: %s", msg)
+	}
+	state := ""
+	for i := 0; i < 8; i++ {
+		st, _ := run(ctx, e, 10*time.Second, "-s", local, "get-state")
+		if state = strings.TrimSpace(string(st)); state == "device" {
+			return local, msg, nil
+		}
+		time.Sleep(400 * time.Millisecond)
+	}
+	return "", msg, fmt.Errorf("connected, but the phone reports state %q (wireless debugging was toggled, a pairing dialog is open, or this pairing was removed)", state)
+}
+
+func Pair(ctx context.Context, dial DialFunc, netState []byte, host string, pairPort int, code string, connectPort int) (token, pairMsg, connectMsg string, err error) {
+	if host == "" || pairPort <= 0 || code == "" {
+		return "", "", "", errors.New("host, pairPort and code are required")
+	}
+	if _, err := sealKey(sealLabel); err != nil {
+		return "", "", "", err
+	}
+	priv, pub, err := newKeyPair(ctx)
+	if err != nil {
+		return "", "", "", err
+	}
+	s := &session{Priv: priv, Pub: pub, Host: host, Port: connectPort, Net: netState}
+	e, err := startServer(ctx, s)
+	if err != nil {
+		return "", "", "", err
+	}
+	local, err := fwd.local(fmt.Sprintf("%s:%d", host, pairPort), dial)
+	if err != nil {
+		return "", "", "", err
+	}
+	out, err := run(ctx, e, 40*time.Second, "pair", local, code)
+	pairMsg = strings.TrimSpace(string(out))
+	if err != nil || !strings.Contains(pairMsg, "Successfully paired") {
+		return "", pairMsg, "", errors.New("pairing failed: " + pairMsg)
+	}
+	if token, err = seal(s); err != nil {
+		return "", pairMsg, "", err
+	}
+	if connectPort > 0 {
+		if _, msg, cerr := connect(ctx, e, dial, host, connectPort); cerr != nil {
+			connectMsg = cerr.Error()
+		} else {
+			connectMsg = msg
+		}
+	}
+	return token, pairMsg, connectMsg, nil
+}
+
+type DialResolver func(ctx context.Context, netState []byte) (DialFunc, error)
+
+func Reconnect(ctx context.Context, resolve DialResolver, token, host string, port int) (string, string, error) {
+	s, err := open(token)
+	if err != nil {
+		return "", "", err
+	}
+	dial, err := resolve(ctx, s.Net)
+	if err != nil {
+		return "", "", err
+	}
+	if host != "" {
+		s.Host = host
+	}
+	s.Port = port
+	e, err := startServer(ctx, s)
+	if err != nil {
+		return "", "", err
+	}
+	_, msg, err := connect(ctx, e, dial, s.Host, s.Port)
+	if err != nil {
+		return "", "", err
+	}
+	nt, err := seal(s)
+	return nt, msg, err
+}
+
+type Client struct {
+	e      env
+	serial string
+	Host   string
+	Port   int
+}
+
+func Attach(ctx context.Context, token string, resolve DialResolver) (*Client, error) {
+	s, err := open(token)
+	if err != nil {
+		return nil, err
+	}
+	dial, err := resolve(ctx, s.Net)
+	if err != nil {
+		return nil, err
+	}
+	return attach(ctx, s, dial)
+}
+
+func attach(ctx context.Context, s *session, dial DialFunc) (*Client, error) {
+	if s.Port <= 0 {
+		return nil, errors.New("this session has no connect port; re-pair or update the port")
+	}
+	e, err := startServer(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	serial, _, err := connect(ctx, e, dial, s.Host, s.Port)
+	if err != nil {
+		return nil, fmt.Errorf("%w (wireless debugging off, or its port changed)", err)
+	}
+	return &Client{e: e, serial: serial, Host: s.Host, Port: s.Port}, nil
+}
+
+func (c *Client) Run(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
+	return run(ctx, c.e, timeout, append([]string{"-s", c.serial}, args...)...)
+}
+
+func (c *Client) Shell(ctx context.Context, cmd string) (string, error) {
+	out, err := c.Run(ctx, 45*time.Second, "shell", cmd)
+	return string(out), err
+}
+
+func (c *Client) Screenshot(ctx context.Context) ([]byte, error) {
+	out, err := c.Run(ctx, 30*time.Second, "exec-out", "screencap", "-p")
+	if err != nil || len(out) < 8 {
+		return nil, errors.New("screencap failed: " + strings.TrimSpace(string(out)))
+	}
+	return out, nil
+}
