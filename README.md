@@ -171,6 +171,8 @@ Menu names change often, so if a label differs, check the vendor's page.
 
 1. In your client, add a custom MCP server with the URL `https://<your-deployment>/mcp` and choose **OAuth**. Leave the client ID and client secret empty.
 2. The client opens a browser window with the tailshell page and a notice saying which app and address you will be sent back to. Only continue if you started this from that app.
+![The tailshell page when a client such as ChatGPT starts OAuth](docs/screenshots/oauth-authorize.png)
+
 3. Either **pair the phone** as in step 4 (you'll see *Pair and authorize* instead of the URLs), or, if you already have a tailshell URL or token, paste it under **Already set up?** and press *Authorize with this*. If wireless debugging was toggled since then, enter the new connect port there too.
 4. You're sent back to the client, which now holds the connection. Nothing secret appears in the URL you typed.
 
