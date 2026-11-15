@@ -76,33 +76,41 @@ func (f *forwarder) local(target string, dial DialFunc) (string, error) {
 	return e.addr, nil
 }
 
-func connect(ctx context.Context, e env, dial DialFunc, host string, port int) (string, string, error) {
-	target := fmt.Sprintf("%s:%d", host, port)
-	var dialErr error
+func probe(ctx context.Context, dial DialFunc, target string) error {
+	var err error
 	for i := 0; i < 3; i++ {
 		pctx, cancel := context.WithTimeout(ctx, 8*time.Second)
-		c, err := dial(pctx, "tcp", target)
+		c, derr := dial(pctx, "tcp", target)
 		cancel()
-		if dialErr = err; err == nil {
+		if err = derr; err == nil {
 			c.Close()
-			break
+			return nil
 		}
 		if i < 2 {
 			time.Sleep(1500 * time.Millisecond)
 		}
 	}
-	if dialErr != nil {
-		return "", "", fmt.Errorf("cannot reach %s over the tailnet: %v", target, dialErr)
-	}
+	return err
+}
+
+func connect(ctx context.Context, e env, dial DialFunc, host string, port int) (string, string, error) {
+	target := fmt.Sprintf("%s:%d", host, port)
 	local, err := fwd.local(target, dial)
 	if err != nil {
 		return "", "", err
 	}
 	run(ctx, e, 10*time.Second, "disconnect", local)
-	out, err := run(ctx, e, 30*time.Second, "connect", local)
+	out, err := run(ctx, e, 15*time.Second, "connect", local)
 	msg := strings.TrimSpace(string(out))
 	if err != nil || !strings.Contains(msg, "connected to") {
-		return "", msg, fmt.Errorf("connect failed: %s", msg)
+		if perr := probe(ctx, dial, target); perr != nil {
+			return "", "", fmt.Errorf("cannot reach %s over the tailnet: %v", target, perr)
+		}
+		out, err = run(ctx, e, 30*time.Second, "connect", local)
+		msg = strings.TrimSpace(string(out))
+		if err != nil || !strings.Contains(msg, "connected to") {
+			return "", msg, fmt.Errorf("connect failed: %s", msg)
+		}
 	}
 	state := ""
 	for i := 0; i < 8; i++ {

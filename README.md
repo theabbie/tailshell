@@ -66,6 +66,19 @@ vercel deploy --prod
 
 Open your deployment (for example `https://tailshell.vercel.app`). If the page says the server isn't configured, `SEAL_SECRET` is missing or shorter than 16 characters.
 
+### Pick a region near your phone
+
+Vercel runs a function in one region (the default is `iad1`, Washington D.C.) and doesn't choose one by geography. Every call opens a path to your phone through Tailscale, and each network round trip adds up, so a region close to the phone is much faster. A region isn't one of the Deploy Button's documented parameters, so set it after the first deploy and redeploy.
+
+- In the Vercel dashboard: **Project → Settings → Functions → Function Region** (labels may differ), or
+- in `vercel.json`:
+
+```json
+{ "regions": ["bom1"] }
+```
+
+In one test with the phone in India, a call took about 3.4 s from `iad1` and about 2.0 s from `bom1` (Mumbai). Results depend on where your phone and tailnet are, so try a couple of regions. The plan you're on may limit how many regions you can use.
+
 ## 2. Set up Tailscale
 
 1. Create a Tailscale account at <https://login.tailscale.com> and install the **Tailscale app on your phone** ([Google Play](https://play.google.com/store/apps/details?id=com.tailscale.ipn)). Sign in and turn it on. Your phone now appears in your tailnet with a `100.x.y.z` address.
@@ -237,7 +250,7 @@ You can't recover a lost pairing without a new pairing code, and a new URL means
 - **The phone screen must be unlocked.** The agent can wake the screen but can't enter a PIN, by design.
 - **Screenshots in AI clients:** MCP supports image results, but support varies by client. Community reports suggest ChatGPT may not show or pass the image to the model reliably, so agents are told to prefer `phone_ui`, which returns text. Test your client.
 - **Parallel calls can conflict.** tailshell reuses a single Tailscale identity and reconnects for each request, which is why each call takes a few seconds. Calls that overlap in time may be handled by different function instances, and each of them then tries to use the same node key. Tailscale allows only one live connection per key, so overlapping calls can be slow or fail, and the Tailscale admin console may briefly show a "Duplicate node key" warning. Use clients or settings that call tools one at a time, and retry on failure. Several requests handled by the same instance share one connection and are fine.
-- **Vercel limits apply:** calls time out at 60 seconds and responses are capped at about 4.5 MB. A cold start (joining the tailnet and starting adb) takes a few seconds.
+- **Vercel limits apply:** calls time out at 60 seconds and responses are capped at about 4.5 MB. A cold start (joining the tailnet and starting adb) takes a few seconds. Every call also reconnects to Tailscale, so expect roughly 2 seconds with a nearby region and 3 to 4 seconds from the other side of the world.
 - **No rate limiting**, and the service accepts any Tailscale auth key typed into its home page. Run your own copy, and keep the deployment URL to yourself if that matters to you.
 - **Shell access means an agent can do real damage.** Review what your agent is allowed to do and prefer confirm-before-acting modes.
 - adb comes from Google's `platform-tools` download, which is not checksum-verified beyond TLS.
