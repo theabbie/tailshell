@@ -112,6 +112,8 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+const tcpPort = 5555
+
 func connect(w http.ResponseWriter, r *http.Request) {
 	if !adbx.SealSecretConfigured() {
 		fail(w, 503, errors.New("this deployment has no SEAL_SECRET set"))
@@ -152,6 +154,7 @@ func pair(w http.ResponseWriter, r *http.Request) {
 		Code        string `json:"code"`
 		ConnectPort int    `json:"connectPort"`
 		OAuth       string `json:"oauth"`
+		TCPIP       bool   `json:"tcpip"`
 	}
 	if readBody(r, &b) != nil || b.Host == "" || b.PairPort <= 0 || strings.TrimSpace(b.Code) == "" || b.ConnectPort <= 0 {
 		fail(w, 400, errors.New("host, pairPort, code and connectPort are required"))
@@ -184,6 +187,14 @@ func pair(w http.ResponseWriter, r *http.Request) {
 		fail(w, 502, err)
 		return
 	}
+	warning := ""
+	if b.TCPIP {
+		if nt, terr := adbx.EnableTCP(r.Context(), tailx.Resolver, token, tcpPort); terr != nil {
+			warning = "Paired, but switching to adb over TCP failed, so this URL still needs Wi-Fi and wireless debugging (USB debugging must be on too): " + terr.Error()
+		} else {
+			token = nt
+		}
+	}
 	if authz != nil {
 		redirect, err := authz.Complete(token)
 		if err != nil {
@@ -196,6 +207,9 @@ func pair(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]any{"url": origin(r) + "/mcp/" + token, "httpUrl": origin(r) + "/h/" + token}
 	if !strings.Contains(connectMsg, "connected to") {
 		resp["warning"] = "Paired, but the first connection failed: " + connectMsg
+	}
+	if warning != "" {
+		resp["warning"] = warning
 	}
 	writeJSON(w, 200, resp)
 }

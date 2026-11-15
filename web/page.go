@@ -140,6 +140,11 @@ summary{cursor:pointer;color:var(--muted);font-size:13px}
       <input id="pport" inputmode="numeric" placeholder="e.g. 34083">
       <label for="pcode">Pairing code</label>
       <input id="pcode" inputmode="numeric" autocomplete="off" placeholder="6 digits">
+      <details style="margin-top:14px">
+        <summary>Keep it working without Wi-Fi (optional)</summary>
+        <p class="hint" style="margin:8px 0">Wireless debugging only runs while the phone is on Wi-Fi. Turn <b>USB debugging</b> on too, then tick this: after pairing, tailshell switches the phone to adb over TCP on port 5555, which keeps working over mobile data through Tailscale. The setting resets when the phone restarts, and port 5555 is also open to other devices on the phone's networks (they still need your approval to connect).</p>
+        <label style="display:flex;align-items:center;gap:8px;margin:0"><input type="checkbox" id="tcpip" style="width:auto;margin:0"> Switch to adb over TCP after pairing</label>
+      </details>
       <div class="row"><button class="primary" id="pair">Pair and create MCP URL</button><span class="hint" id="pair-hint"></span></div>
     </div>
     <p class="hide" id="other-msg" style="margin-top:12px">Only Android phones are supported right now.</p>
@@ -246,7 +251,8 @@ summary{cursor:pointer;color:var(--muted);font-size:13px}
     };
     if (!body.connectPort || !body.pairPort || !body.code) { err("pair-err", "Fill in all three fields."); return; }
     if (OAUTH) body.oauth = OAUTH.ctx;
-    busy($("pair"), "pair-hint", true, "Pairing…");
+    if ($("tcpip").checked) body.tcpip = true;
+    busy($("pair"), "pair-hint", true, body.tcpip ? "Pairing, then switching to TCP…" : "Pairing…");
     api("/api/pair", body).then(function (r) {
       if (r.redirect) { window.location.assign(r.redirect); return; }
       $("mcpurl").textContent = r.url; $("httpurl").textContent = r.httpUrl; show("out-card", true); $("pcode").value = "";

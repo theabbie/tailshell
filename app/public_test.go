@@ -32,3 +32,12 @@ func TestDomainChallenge(t *testing.T) {
 		t.Errorf("challenge must be exactly the token as plain text: %d %q", w.Code, w.Body.String())
 	}
 }
+
+func TestTCPOption(t *testing.T) {
+	if w := call("GET", "/", ""); !strings.Contains(w.Body.String(), `id="tcpip"`) || strings.Contains(w.Body.String(), "TS_TCP") {
+		t.Error("home page is missing the optional TCP switch")
+	}
+	if w := call("GET", "/tcp", ""); w.Code != 404 {
+		t.Errorf("/tcp: %d", w.Code)
+	}
+}

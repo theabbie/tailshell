@@ -102,6 +102,26 @@ In one test with the phone in India, a call took about 3.4 s from `iad1` and abo
 
 ![Wireless debugging screen with the connect port](docs/screenshots/02-wireless-debugging.png)
 
+### Optional: keep it working without Wi-Fi
+
+Wireless debugging only stays on while the phone is on a Wi-Fi network, and Android stops adbd when Wi-Fi drops. If you want tailshell to work away from Wi-Fi, switch the phone to adb over TCP once, while it is still on Wi-Fi.
+
+**The tradeoff:** you still need a Wi-Fi network **once**, because pairing and the switch both go through Wireless debugging, which Android only lets you turn on while connected to Wi-Fi (any network you can use for a few minutes, such as a hotspot from another device). In return, **USB debugging stays on** afterwards instead of Wireless debugging, and the phone then works over mobile data with no Wi-Fi and no cable. After every phone restart you need Wi-Fi once more.
+
+
+1. Turn on **USB debugging** (Developer options) as well as Wireless debugging. With USB debugging on, adbd keeps running without a cable and without Wi-Fi.
+2. In step 4, open **Keep it working without Wi-Fi (optional)** on the pairing form and tick **Switch to adb over TCP after pairing**. After pairing, tailshell runs `adb tcpip 5555` through the connection and gives you a URL that points at port 5555.
+3. From then on the URL needs only Tailscale on the phone. Wi-Fi and the Wireless debugging switch can be off.
+
+Already have a URL? Do the same by pasting it and the port `5555` into **Wireless debugging port changed?** on the home page, once the phone has been switched. The default route (wireless debugging only) is unchanged.
+
+What to know:
+
+- Port 5555 resets when the phone restarts. Then you need Wi-Fi once more to repeat the switch.
+- USB debugging stays on, and port 5555 is also reachable from other devices on any network the phone joins. They still need the phone's approval of their adb key, and tailshell's key is already approved, but treat the phone accordingly and turn USB debugging off when you don't need this.
+- Tested on one phone (Motorola Edge 40 Neo, Android 15). Other makers' Android builds may stop adbd differently.
+
+
 ## 4. Pair the phone and get your URLs
 
 ```mermaid
@@ -277,7 +297,7 @@ Tool descriptions and server instructions are written for agents: they explain t
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| "cannot reach the phone" | Phone asleep, Tailscale off on the phone, or wireless debugging off | Wake the phone, check Tailscale and wireless debugging, then retry (the first call after idle can be slow) |
+| "cannot reach the phone" | Phone asleep, Tailscale off on the phone, wireless debugging off (or, on the TCP route, USB debugging off or the phone restarted) | Wake the phone, check Tailscale and wireless debugging, then retry (the first call after idle can be slow) |
 | Works, then fails after you toggled wireless debugging | The connect port changed | Use **Wireless debugging port changed?** on the home page with your MCP URL and the new port. No pairing code is needed. Update the URL in your client |
 | Connected but "state offline" | A pairing dialog is open on the phone, or the pairing was removed | Close the dialog; if the paired device was forgotten, pair again |
 | The client keeps asking you to authorize, or errors with `invalid_token` | The `tailshell` machine was removed or its key expired, or `SEAL_SECRET` changed | Authorize again; with an old URL or token the paste box on the page is enough if the machine still exists, otherwise pair again with a fresh auth key |

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -186,6 +187,39 @@ func Reconnect(ctx context.Context, resolve DialResolver, token, host string, po
 	}
 	nt, err := seal(s)
 	return nt, msg, err
+}
+
+// EnableTCP switches the phone's adbd to a fixed TCP port through the current
+// connection and returns a session on that port, which keeps working when
+// wireless debugging is off. The old session is untouched if any step fails.
+func EnableTCP(ctx context.Context, resolve DialResolver, token string, port int) (string, error) {
+	s, err := open(token)
+	if err != nil {
+		return "", err
+	}
+	dial, err := resolve(ctx, s.Net)
+	if err != nil {
+		return "", err
+	}
+	c, err := attach(ctx, s, dial)
+	if err != nil {
+		return "", err
+	}
+	out, err := c.Run(ctx, 20*time.Second, "tcpip", strconv.Itoa(port))
+	if msg := strings.TrimSpace(string(out)); err != nil || !strings.Contains(msg, "TCP mode") {
+		return "", fmt.Errorf("adb tcpip failed: %s", msg)
+	}
+	run(ctx, c.e, 10*time.Second, "disconnect", c.serial)
+	s.Port = port
+	for i := 0; ; i++ {
+		if _, _, err = connect(ctx, c.e, dial, s.Host, port); err == nil {
+			return seal(s)
+		}
+		if i == 3 {
+			return "", fmt.Errorf("switched to TCP port %d but could not connect to it: %w", port, err)
+		}
+		time.Sleep(2 * time.Second)
+	}
 }
 
 type Client struct {
