@@ -20,6 +20,7 @@ flowchart LR
 
 - tailshell runs as a Vercel function. It joins **your** tailnet as a small node called `tailshell` (userspace Tailscale, no VPN setup).
 - It runs a real `adb` binary and pairs with your phone through the tailnet.
+- The node connects to your tailnet only while a request is running and disconnects before the function returns. That keeps one reusable identity from being held by an idle, frozen instance (see [parallel calls](#limits-and-caveats)).
 - **Nothing is stored on the server.** The URL you get *is* the connection:
 
 ```mermaid
@@ -226,6 +227,7 @@ Tool descriptions and server instructions are written for agents: they explain t
 | Connected but "state offline" | A pairing dialog is open on the phone, or the pairing was removed | Close the dialog; if the paired device was forgotten, pair again |
 | Invalid URL / 401 | `SEAL_SECRET` was changed, or the URL was truncated | Create a new URL |
 | Can't rejoin the tailnet | The `tailshell` machine was deleted, or its key expired (about 180 days by default) | Create a new URL with a fresh auth key |
+| Slow or failed calls, and a **Duplicate node key** warning on the `tailshell` machine in Tailscale | Several requests ran at the same moment on different function instances, and each tried to use the node's single key | Run tool calls one at a time and retry. The warning normally clears once the overlap stops; if calls keep failing with "node key is in use elsewhere", remove the `tailshell` machine in Tailscale and create a new URL |
 
 You can't recover a lost pairing without a new pairing code, and a new URL means updating your AI client.
 
@@ -234,6 +236,7 @@ You can't recover a lost pairing without a new pairing code, and a new URL means
 - **Android only**, 11 or newer. Text entry is ASCII only (no emoji or non-Latin text).
 - **The phone screen must be unlocked.** The agent can wake the screen but can't enter a PIN, by design.
 - **Screenshots in AI clients:** MCP supports image results, but support varies by client. Community reports suggest ChatGPT may not show or pass the image to the model reliably, so agents are told to prefer `phone_ui`, which returns text. Test your client.
+- **Parallel calls can conflict.** tailshell reuses a single Tailscale identity and reconnects for each request, which is why each call takes a few seconds. Calls that overlap in time may be handled by different function instances, and each of them then tries to use the same node key. Tailscale allows only one live connection per key, so overlapping calls can be slow or fail, and the Tailscale admin console may briefly show a "Duplicate node key" warning. Use clients or settings that call tools one at a time, and retry on failure. Several requests handled by the same instance share one connection and are fine.
 - **Vercel limits apply:** calls time out at 60 seconds and responses are capped at about 4.5 MB. A cold start (joining the tailnet and starting adb) takes a few seconds.
 - **No rate limiting**, and the service accepts any Tailscale auth key typed into its home page. Run your own copy, and keep the deployment URL to yourself if that matters to you.
 - **Shell access means an agent can do real damage.** Review what your agent is allowed to do and prefer confirm-before-acting modes.

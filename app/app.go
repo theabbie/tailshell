@@ -49,6 +49,9 @@ func origin(r *http.Request) string {
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
+	ctx, done := tailx.Scope(r.Context())
+	defer done()
+	r = r.WithContext(ctx)
 	p := strings.TrimRight(r.URL.Path, "/")
 	switch {
 	case p == "" && r.Method == http.MethodGet:

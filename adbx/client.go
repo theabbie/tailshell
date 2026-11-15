@@ -13,23 +13,43 @@ import (
 
 type DialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 
-type forwarder struct {
-	mu sync.Mutex
-	m  map[string]string
+type fwdEntry struct {
+	addr string
+	mu   sync.Mutex
+	dial DialFunc
 }
 
-var fwd = &forwarder{m: map[string]string{}}
+func (e *fwdEntry) set(d DialFunc) {
+	e.mu.Lock()
+	e.dial = d
+	e.mu.Unlock()
+}
+
+func (e *fwdEntry) get() DialFunc {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.dial
+}
+
+type forwarder struct {
+	mu sync.Mutex
+	m  map[string]*fwdEntry
+}
+
+var fwd = &forwarder{m: map[string]*fwdEntry{}}
 
 func (f *forwarder) local(target string, dial DialFunc) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if l, ok := f.m[target]; ok {
-		return l, nil
+	if e, ok := f.m[target]; ok {
+		e.set(dial)
+		return e.addr, nil
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return "", err
 	}
+	e := &fwdEntry{addr: ln.Addr().String(), dial: dial}
 	go func() {
 		for {
 			c, err := ln.Accept()
@@ -40,7 +60,7 @@ func (f *forwarder) local(target string, dial DialFunc) (string, error) {
 				defer c.Close()
 				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 				defer cancel()
-				rc, err := dial(ctx, "tcp", target)
+				rc, err := e.get()(ctx, "tcp", target)
 				if err != nil {
 					return
 				}
@@ -52,9 +72,8 @@ func (f *forwarder) local(target string, dial DialFunc) (string, error) {
 			}()
 		}
 	}()
-	addr := ln.Addr().String()
-	f.m[target] = addr
-	return addr, nil
+	f.m[target] = e
+	return e.addr, nil
 }
 
 func connect(ctx context.Context, e env, dial DialFunc, host string, port int) (string, string, error) {
@@ -67,6 +86,9 @@ func connect(ctx context.Context, e env, dial DialFunc, host string, port int) (
 		if dialErr = err; err == nil {
 			c.Close()
 			break
+		}
+		if i < 2 {
+			time.Sleep(1500 * time.Millisecond)
 		}
 	}
 	if dialErr != nil {
