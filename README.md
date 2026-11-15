@@ -193,7 +193,13 @@ How it behaves:
 
 Availability depends on your plan, and custom connectors are web-only on some plans; workspace admins may need to allow them. See [OpenAI's guide](https://developers.openai.com/api/docs/guides/custom-mcp-server).
 
-**Plugin archive.** Each [release](https://github.com/theabbie/tailshell/releases) carries `tailshell-plugin-<version>.zip`, the contents of `plugin/` with the manifest at the archive root. It is the file for ChatGPT's plugin upload, and it points at `https://tailshell.vercel.app/mcp`, so a plugin built from it uses the hosted deployment, not yours. To use your own, change the URLs in `plugin.json` and `mcp.json` before zipping (`cd plugin && zip -r ../tailshell-plugin.zip . -x '.*'`).
+**Plugin archive.** Each [release](https://github.com/theabbie/tailshell/releases) carries `tailshell-plugin-<version>.zip`, the contents of `plugin/` with the manifest at the archive root. It lists the server but ChatGPT does not show a connect prompt for a plugin installed from a ZIP, so as shipped it cannot sign in. To use a ZIP plugin, give it your own URL:
+
+1. Pair your phone on your deployment and copy the MCP URL (`https://<your-deployment>/mcp/<token>`). It is a secret, so keep the edited ZIP private.
+2. In the ZIP, open `mcp.json`, set `url` to that MCP URL, and delete the `extensions` block under the server (no OAuth is needed because the token is in the URL).
+3. Save the ZIP and upload it as a plugin in ChatGPT.
+
+Without a ZIP, add the MCP URL or `https://<your-deployment>/mcp` as a custom MCP server instead (see ChatGPT below).
 
 ### Claude (claude.ai and desktop)
 

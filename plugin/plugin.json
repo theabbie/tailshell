@@ -19,6 +19,7 @@
   ],
   "extensions": {
     "com.openai": {
+      "requires_local_executor": false,
       "onboardingSkill": "./skills/setup/SKILL.md",
       "interface": {
         "displayName": "tailshell",
