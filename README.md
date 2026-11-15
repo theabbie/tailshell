@@ -6,7 +6,7 @@ Let an AI agent use your Android phone. tailshell pairs a phone over your privat
 
 The agent can look at the screen, tap, swipe, type, press keys, open apps and links, and run shell commands, all over adb wireless debugging.
 
-![tailshell home page](docs/screenshots/home-landscape.png)
+![ChatGPT using tailshell to read the specs of a connected phone](docs/screenshots/chatgpt-phone-specs.png)
 
 ## How it works
 
@@ -123,6 +123,8 @@ sequenceDiagram
     Note over You: paste the MCP URL into your AI client
 ```
 
+![The tailshell home page](docs/screenshots/home-landscape.png)
+
 1. Open your deployment, paste your **Tailscale auth key** and press **Connect**. tailshell joins your tailnet as `tailshell` and lists your devices. (Already have a node state from an earlier run? Paste it under *Already have node state?* to skip the key.)
 2. **Choose your phone** from the list and keep *Android phone* selected.
 3. On the phone, open **Wireless debugging → Pair device with pairing code**. A dialog shows a six-digit code and a *pairing* port.
@@ -190,6 +192,8 @@ How it behaves:
 3. In a new chat, enable the connector from the tools menu, then ask something like *"Take a look at my phone screen and tell me which apps are open."*
 
 Availability depends on your plan, and custom connectors are web-only on some plans; workspace admins may need to allow them. See [OpenAI's guide](https://developers.openai.com/api/docs/guides/custom-mcp-server).
+
+**Plugin archive.** Each [release](https://github.com/theabbie/tailshell/releases) carries `tailshell-plugin-<version>.zip`, the contents of `plugin/` with the manifest at the archive root. It is the file for ChatGPT's plugin upload, and it points at `https://tailshell.vercel.app/mcp`, so a plugin built from it uses the hosted deployment, not yours. To use your own, change the URLs in `plugin.json` and `mcp.json` before zipping (`cd plugin && zip -r ../tailshell-plugin.zip . -x '.*'`).
 
 ### Claude (claude.ai and desktop)
 

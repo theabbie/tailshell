@@ -26,7 +26,8 @@ Annotation choices: tap, swipe, type, key and shell are marked destructive becau
 - A verified developer identity in the OpenAI platform dashboard, and a category from its list.
 - Set `OPENAI_APPS_CHALLENGE` to the token the dashboard shows, then redeploy.
 - A dedicated review setup (below), release notes, a demo recording, and the commerce declaration (none).
-- Zip `plugin/` (no secrets) and submit.
+- Upload the plugin archive from the latest [release](https://github.com/theabbie/tailshell/releases) (`tailshell-plugin-<version>.zip`, built with `cd plugin && zip -r ../tailshell-plugin-1.0.0.zip . -x '.*'`, manifest at the archive root, no secrets) and submit. The portal reads the package details from it and shows them read-only; change them in `plugin/plugin.json` and upload a new version.
+- `interface.category` must be a category title from the dashboard. It is set to `Productivity`; change it if the dashboard lists a better fit.
 
 ## Where the guidelines and this project pull apart
 

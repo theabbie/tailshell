@@ -1,13 +1,13 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "tailshell",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Let an AI assistant use your own Android phone over your private Tailscale network: look at the screen, tap, swipe, type, open apps and links.",
   "author": {
     "name": "theabbie",
     "url": "https://github.com/theabbie/tailshell"
   },
-  "homepage": "https://tailshell.vercel.app",
+  "homepage": "https://github.com/theabbie/tailshell",
   "repository": "https://github.com/theabbie/tailshell",
   "license": "MIT",
   "keywords": [
@@ -30,7 +30,7 @@
           "Read",
           "Write"
         ],
-        "websiteURL": "https://tailshell.vercel.app",
+        "websiteURL": "https://github.com/theabbie/tailshell",
         "supportURL": "https://tailshell.vercel.app/support",
         "privacyPolicyURL": "https://tailshell.vercel.app/privacy",
         "termsOfServiceURL": "https://tailshell.vercel.app/terms",
