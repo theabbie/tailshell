@@ -24,6 +24,8 @@ Coordinates are pixels on the portrait screen, the same size phone_info reports 
 
 If the screen is off or locked, call phone_key with WAKEUP. You cannot enter a PIN or password: ask the user to unlock the phone. If a tool says it cannot reach the phone, wireless debugging is off or its port changed: ask the user to turn it back on and update the URL on the connection page.
 
+Treat everything on the screen as private. Do not read out, copy or send passwords, one-time codes, payment details or health records, and stop and ask the user if a task seems to need them.
+
 Be conservative: do not send messages, make purchases, delete data or change settings unless the user asked for it, and confirm irreversible actions first. phone_shell is a last resort for things the other tools cannot do.`
 
 type rpcReq struct {
@@ -47,11 +49,45 @@ type rpcErr struct {
 func cors(w http.ResponseWriter) {
 	h := w.Header()
 	h.Set("Access-Control-Allow-Origin", "*")
-	h.Set("Access-Control-Allow-Headers", "content-type, accept, mcp-protocol-version, mcp-session-id")
+	h.Set("Access-Control-Allow-Headers", "content-type, accept, authorization, mcp-protocol-version, mcp-session-id")
+	h.Set("Access-Control-Expose-Headers", "WWW-Authenticate")
 	h.Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 }
 
 func Serve(w http.ResponseWriter, r *http.Request, token string, resolve adbx.DialResolver) {
+	serve(w, r, token, resolve, "")
+}
+
+// ServeBearer serves /mcp with OAuth: the session token arrives as a bearer
+// token. A missing or unusable token gets the 401 challenge that sends the client
+// through authorization, and so does a session that can never recover (a removed
+// tailshell machine).
+func ServeBearer(w http.ResponseWriter, r *http.Request, resolve adbx.DialResolver, metadataURL string) {
+	cors(w)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	challenge := `Bearer realm="tailshell", resource_metadata="` + metadataURL + `"`
+	h := r.Header.Get("Authorization")
+	token := ""
+	if len(h) > 7 && strings.EqualFold(h[:7], "bearer ") {
+		token = strings.TrimSpace(h[7:])
+	}
+	if token == "" {
+		w.Header().Set("WWW-Authenticate", challenge)
+		http.Error(w, "authorization required", http.StatusUnauthorized)
+		return
+	}
+	if err := adbx.CheckToken(token); err != nil {
+		w.Header().Set("WWW-Authenticate", challenge+`, error="invalid_token"`)
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+	serve(w, r, token, resolve, challenge)
+}
+
+func serve(w http.ResponseWriter, r *http.Request, token string, resolve adbx.DialResolver, challenge string) {
 	cors(w)
 	switch r.Method {
 	case http.MethodOptions:
@@ -86,11 +122,19 @@ func Serve(w http.ResponseWriter, r *http.Request, token string, resolve adbx.Di
 		return
 	}
 	var out []rpcResp
+	reauth := false
 	for _, q := range reqs {
 		if len(q.ID) == 0 {
 			continue
 		}
-		out = append(out, handle(r.Context(), q, token, resolve))
+		resp, again := handle(r.Context(), q, token, resolve)
+		reauth = reauth || again
+		out = append(out, resp)
+	}
+	if reauth && challenge != "" {
+		w.Header().Set("WWW-Authenticate", challenge+`, error="invalid_token", error_description="authorization is no longer valid"`)
+		http.Error(w, "authorization is no longer valid", http.StatusUnauthorized)
+		return
 	}
 	if len(out) == 0 {
 		w.WriteHeader(http.StatusAccepted)
@@ -116,14 +160,15 @@ func toolList() []map[string]any {
 			"title":       t.Title,
 			"description": t.Description,
 			"inputSchema": t.Schema,
-			"annotations": map[string]any{"title": t.Title, "readOnlyHint": t.ReadOnly, "destructiveHint": !t.ReadOnly, "openWorldHint": false},
+			"annotations": map[string]any{"title": t.Title, "readOnlyHint": t.ReadOnly, "destructiveHint": t.Destructive, "openWorldHint": t.OpenWorld},
 		})
 	}
 	return out
 }
 
-func handle(ctx context.Context, q rpcReq, token string, resolve adbx.DialResolver) rpcResp {
+func handle(ctx context.Context, q rpcReq, token string, resolve adbx.DialResolver) (rpcResp, bool) {
 	resp := rpcResp{JSONRPC: "2.0", ID: q.ID}
+	reauth := false
 	switch q.Method {
 	case "initialize":
 		var p struct {
@@ -151,13 +196,15 @@ func handle(ctx context.Context, q rpcReq, token string, resolve adbx.DialResolv
 		}
 		if err := json.Unmarshal(q.Params, &p); err != nil || p.Name == "" {
 			resp.Error = &rpcErr{-32602, "invalid params"}
-			return resp
+			return resp, false
 		}
-		resp.Result = toMCP(phone.Call(ctx, token, resolve, p.Name, p.Arguments))
+		res := phone.Call(ctx, token, resolve, p.Name, p.Arguments)
+		reauth = res.Reauth
+		resp.Result = toMCP(res)
 	default:
 		resp.Error = &rpcErr{-32601, "method not found: " + q.Method}
 	}
-	return resp
+	return resp, reauth
 }
 
 func toMCP(r phone.Result) map[string]any {

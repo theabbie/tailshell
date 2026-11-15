@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"math/big"
 	"net"
 	"os"
@@ -187,6 +188,10 @@ func Open(ctx context.Context, state []byte) (*tsnet.Server, error) {
 			hold(ctx, key, e)
 			return srv, nil
 		}
+		if needsLogin(ctx, srv) {
+			srv.Close()
+			return nil, fmt.Errorf("%w: the tailshell machine was removed from your tailnet or its key expired; set tailshell up again", adbx.ErrReauth)
+		}
 		srv.Close()
 		lastErr = err
 	}
@@ -212,6 +217,20 @@ func waitForPeers(ctx context.Context, srv *tsnet.Server) {
 			return
 		}
 	}
+}
+
+// needsLogin reports whether the control plane rejected the saved node key. That
+// only happens when the machine was deleted or the key expired, which no retry
+// can fix.
+func needsLogin(ctx context.Context, srv *tsnet.Server) bool {
+	lc, err := srv.LocalClient()
+	if err != nil {
+		return false
+	}
+	c, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	st, err := lc.StatusWithoutPeers(c)
+	return err == nil && st.BackendState == "NeedsLogin"
 }
 
 func Resolver(ctx context.Context, state []byte) (adbx.DialFunc, error) {

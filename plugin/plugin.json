@@ -1,0 +1,48 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "tailshell",
+  "version": "0.1.0",
+  "description": "Let an AI assistant use your own Android phone over your private Tailscale network: look at the screen, tap, swipe, type, open apps and links.",
+  "author": {
+    "name": "theabbie",
+    "url": "https://github.com/theabbie/tailshell"
+  },
+  "homepage": "https://tailshell.vercel.app",
+  "repository": "https://github.com/theabbie/tailshell",
+  "license": "MIT",
+  "keywords": [
+    "android",
+    "phone",
+    "tailscale",
+    "adb",
+    "automation"
+  ],
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/setup/SKILL.md",
+      "interface": {
+        "displayName": "tailshell",
+        "shortDescription": "Use your Android phone",
+        "longDescription": "tailshell lets the assistant operate an Android phone that you own, over your own Tailscale network and Android wireless debugging. The assistant can read what is on the screen (as text or a screenshot), tap, swipe, type, press navigation keys, open apps and links, list installed apps, and run shell commands on the phone. It is meant for people who already use Tailscale and are comfortable enabling Android developer options. Setup is yours to do once: install Tailscale on the phone, turn on wireless debugging, and pair the phone on the tailshell page that opens when you connect. Limits: Android 11 or newer only, the phone must be awake and unlocked (the assistant cannot enter your PIN), text entry is ASCII only, and each call reconnects to your tailnet so it takes a couple of seconds. The assistant sees whatever is on your screen, so it should only be used on a phone and for tasks you are comfortable sharing with it. tailshell stores nothing; see the privacy policy.",
+        "developerName": "theabbie",
+        "category": "Productivity",
+        "capabilities": [
+          "Read",
+          "Write"
+        ],
+        "websiteURL": "https://tailshell.vercel.app",
+        "supportURL": "https://tailshell.vercel.app/support",
+        "privacyPolicyURL": "https://tailshell.vercel.app/privacy",
+        "termsOfServiceURL": "https://tailshell.vercel.app/terms",
+        "defaultPrompt": [
+          "Take a look at my phone screen and tell me what is on it.",
+          "Open the Settings app on my phone and tell me which page it lands on.",
+          "Which Google apps are installed on my phone?"
+        ],
+        "brandColor": "#71717A",
+        "composerIcon": "./assets/icon.png",
+        "logo": "./assets/logo.png"
+      }
+    }
+  }
+}

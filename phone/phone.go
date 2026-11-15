@@ -3,6 +3,7 @@ package phone
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -17,6 +18,8 @@ type Tool struct {
 	Description string
 	Schema      map[string]any
 	ReadOnly    bool
+	Destructive bool
+	OpenWorld   bool
 }
 
 type Result struct {
@@ -25,6 +28,7 @@ type Result struct {
 	Data    any
 	IsError bool
 	Status  int
+	Reauth  bool
 }
 
 type Element struct {
@@ -52,35 +56,35 @@ func num(desc string) map[string]any { return map[string]any{"type": "integer", 
 
 var Tools = []Tool{
 	{Name: "phone_screenshot", Title: "Screenshot", ReadOnly: true, Schema: schema(map[string]any{}),
-		Description: "Capture the phone screen as a PNG image. Use it to see what is on screen before acting and again after acting to verify the result. Pixel positions in the image are the same coordinates phone_tap and phone_swipe use. Secure screens (some banking apps, password fields) may come out black. Prefer phone_ui when you need exact tap targets or to read text."},
+		Description: "Capture the phone screen as a PNG image. Use it to see what is on screen before acting and again after acting to verify the result. Pixel positions in the image are the same coordinates phone_tap and phone_swipe use. Secure screens (some banking apps, password fields) may come out black. Prefer phone_ui when you need exact tap targets or to read text. The screen may show private data (messages, passwords, one-time codes, payment or health details): look only at what the request needs and never repeat or forward secrets."},
 	{Name: "phone_ui", Title: "Read screen elements", ReadOnly: true, Schema: schema(map[string]any{}),
-		Description: "List the elements currently on screen as text, with the center x,y to tap for each, from Android's accessibility tree. Each line: [n] \"text\" (content description) kind, clickable/scrollable/editable flags, center=(x,y). Find the element by its text or description, then phone_tap its center. Only elements with text, a description, or that are clickable are listed. Empty or sparse for games, some WebViews and secure screens: fall back to phone_screenshot."},
+		Description: "List the elements currently on screen as text, with the center x,y to tap for each, from Android's accessibility tree. Each line: [n] \"text\" (content description) kind, clickable/scrollable/editable flags, center=(x,y). Find the element by its text or description, then phone_tap its center. Only elements with text, a description, or that are clickable are listed. Empty or sparse for games, some WebViews and secure screens: fall back to phone_screenshot. The screen may show private data (messages, passwords, one-time codes, payment or health details): read only what the request needs and never repeat or forward secrets."},
 	{Name: "phone_info", Title: "Phone info", ReadOnly: true, Schema: schema(map[string]any{}),
 		Description: "Phone model, Android version, screen size in pixels (width x height, portrait) and the window currently in focus. Call this first; the screen size defines the coordinate space for tap and swipe."},
-	{Name: "phone_tap", Title: "Tap",
+	{Name: "phone_tap", Destructive: true, Title: "Tap",
 		Schema:      schema(map[string]any{"x": num("x pixel, 0 = left edge"), "y": num("y pixel, 0 = top edge")}, "x", "y"),
-		Description: "Tap the screen at pixel (x, y). Use the center coordinates from phone_ui or positions read off a phone_screenshot. To type into a field, tap it first, then call phone_type."},
-	{Name: "phone_swipe", Title: "Swipe",
+		Description: "Tap the screen at pixel (x, y). Use the center coordinates from phone_ui or positions read off a phone_screenshot. To type into a field, tap it first, then call phone_type. Side effect: it presses whatever is at that spot, which can send, delete or buy if that is what is there, so only tap what the user asked for."},
+	{Name: "phone_swipe", Destructive: true, Title: "Swipe",
 		Schema:      schema(map[string]any{"x1": num("start x"), "y1": num("start y"), "x2": num("end x"), "y2": num("end y"), "duration_ms": num("duration in milliseconds, default 300")}, "x1", "y1", "x2", "y2"),
-		Description: "Swipe from (x1,y1) to (x2,y2). To scroll content DOWN (see what is below), swipe UP: e.g. x1=540,y1=1700 to x2=540,y2=700 on a 1080x2400 screen. To scroll up, swipe down. Use a longer duration_ms (e.g. 800) for a slow drag; the default 300 is a flick."},
-	{Name: "phone_type", Title: "Type text",
+		Description: "Swipe from (x1,y1) to (x2,y2). To scroll content DOWN (see what is below), swipe UP: e.g. x1=540,y1=1700 to x2=540,y2=700 on a 1080x2400 screen. To scroll up, swipe down. Use a longer duration_ms (e.g. 800) for a slow drag; the default 300 is a flick. Side effect: scrolls or drags, and a swipe can also dismiss or reorder items."},
+	{Name: "phone_type", Destructive: true, Title: "Type text",
 		Schema:      schema(map[string]any{"text": str("text to type")}, "text"),
-		Description: "Type text into the focused text field (tap the field first). ASCII only: emoji and non-Latin characters are not supported. Does not press Enter: call phone_key with ENTER to submit or search."},
-	{Name: "phone_key", Title: "Press key",
+		Description: "Type text into the focused text field (tap the field first). ASCII only: emoji and non-Latin characters are not supported. Does not press Enter: call phone_key with ENTER to submit or search. Side effect: the text lands in whatever field has focus, which may be a message or a form."},
+	{Name: "phone_key", Destructive: true, Title: "Press key",
 		Schema:      schema(map[string]any{"key": str("key name such as HOME, or a numeric keycode")}, "key"),
-		Description: "Press a hardware/navigation key. Common: HOME, BACK, APP_SWITCH (recent apps), ENTER, DEL (backspace), TAB, WAKEUP (wake the screen), SLEEP (screen off), POWER (toggles the screen), VOLUME_UP, VOLUME_DOWN, MENU, DPAD_UP/DOWN/LEFT/RIGHT/CENTER. The KEYCODE_ prefix is optional; a numeric Android keycode also works."},
+		Description: "Press a hardware/navigation key. Common: HOME, BACK, APP_SWITCH (recent apps), ENTER, DEL (backspace), TAB, WAKEUP (wake the screen), SLEEP (screen off), POWER (toggles the screen), VOLUME_UP, VOLUME_DOWN, MENU, DPAD_UP/DOWN/LEFT/RIGHT/CENTER. The KEYCODE_ prefix is optional; a numeric Android keycode also works. Side effect: HOME and BACK change what is on screen, and POWER can turn the screen off."},
 	{Name: "phone_open_app", Title: "Open app",
 		Schema:      schema(map[string]any{"package": str("Android package name")}, "package"),
-		Description: "Launch an app by Android package name, e.g. com.google.android.gm (Gmail), com.android.chrome, com.whatsapp, com.google.android.apps.maps, com.android.settings. If you do not know the package name, use phone_list_apps with a filter."},
-	{Name: "phone_open_url", Title: "Open URL",
+		Description: "Launch an app by Android package name, e.g. com.google.android.gm (Gmail), com.android.chrome, com.whatsapp, com.google.android.apps.maps, com.android.settings. If you do not know the package name, use phone_list_apps with a filter. Side effect: launches the app and brings it to the foreground."},
+	{Name: "phone_open_url", OpenWorld: true, Title: "Open URL",
 		Schema:      schema(map[string]any{"url": str("https:// or http:// URL")}, "url"),
-		Description: "Open an http(s) URL in the phone's default browser or the app registered for that link. Only http and https are accepted."},
+		Description: "Open an http(s) URL in the phone's default browser or the app registered for that link. Only http and https are accepted. Side effect: opens the page in the phone's browser, and pages can act on their own once loaded."},
 	{Name: "phone_list_apps", Title: "List installed apps", ReadOnly: true,
 		Schema:      schema(map[string]any{"filter": str("optional substring to match")}),
 		Description: "List the package names of user-installed apps, optionally filtered by a case-insensitive substring (e.g. \"google\", \"bank\", \"maps\"). Use it to find the package name for phone_open_app."},
-	{Name: "phone_shell", Title: "Shell command",
+	{Name: "phone_shell", Destructive: true, Title: "Shell command",
 		Schema:      schema(map[string]any{"command": str("shell command to run")}, "command"),
-		Description: "Run a command in the phone's adb shell (limited shell user, not root). A last resort for things the other tools cannot do, e.g. dumpsys battery, settings get global airplane_mode_on, am start ... . 45s timeout, output capped at 60 KB, no interactive programs. Do not run destructive commands (rm, pm uninstall/clear, settings put, reboot) unless the user explicitly asked."},
+		Description: "Run a command in the phone's adb shell (limited shell user, not root). A last resort for things the other tools cannot do, e.g. dumpsys battery, settings get global airplane_mode_on, am start ... . 45s timeout, output capped at 60 KB, no interactive programs. Do not run destructive commands (rm, pm uninstall/clear, settings put, reboot) unless the user explicitly asked. Side effect: whatever the command does to the phone and its files."},
 }
 
 var (
@@ -159,6 +163,9 @@ func Call(ctx context.Context, token string, resolve adbx.DialResolver, name str
 
 	c, err := adbx.Attach(ctx, token, resolve)
 	if err != nil {
+		if errors.Is(err, adbx.ErrReauth) {
+			return Result{Text: err.Error(), IsError: true, Status: 401, Reauth: true}
+		}
 		return fail(502, "cannot reach the phone: "+err.Error()+". The phone may be asleep or offline in Tailscale, wireless debugging may be off, or its port may have changed: ask the user to check those and, if the port changed, update the URL on the connection page.")
 	}
 	sh := func(cmd string) (string, Result) {

@@ -1,4 +1,4 @@
-# tailshell
+<h1><img src="https://raw.githubusercontent.com/theabbie/tailshell/master/plugin/assets/icon.png" height="25" alt="tailshell logo"> tailshell</h1>
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Ftheabbie%2Ftailshell&project-name=tailshell&repository-name=tailshell&env=SEAL_SECRET&envDescription=A%20random%20secret%20of%20at%20least%2016%20characters%20that%20encrypts%20the%20URLs%20tailshell%20issues.%20Generate%20one%20with%3A%20openssl%20rand%20-hex%2032&envLink=https%3A%2F%2Fgithub.com%2Ftheabbie%2Ftailshell%231-deploy-your-own)
 
@@ -65,6 +65,14 @@ vercel deploy --prod
 ```
 
 Open your deployment (for example `https://tailshell.vercel.app`). If the page says the server isn't configured, `SEAL_SECRET` is missing or shorter than 16 characters.
+
+### Optional settings
+
+`SEAL_SECRET` is the only required setting. One more is optional:
+
+| Variable | Purpose |
+|---|---|
+| `OPENAI_APPS_CHALLENGE` | Served as plain text at `/.well-known/openai-apps-challenge`, for the domain-verification step when listing a plugin in OpenAI's directory (see [docs/SUBMISSION.md](docs/SUBMISSION.md)). |
 
 ### Pick a region near your phone
 
@@ -133,6 +141,7 @@ You get two URLs: an **MCP URL** (`…/mcp/<long token>`) and an **HTTP API base
 > **Disclaimer.** Each URL tailshell generates is a **secret key, not a link**. It contains your phone's adb key and your Tailscale node identity, encrypted so that only the server can read it, but **whoever holds the URL can control your phone** (see the screen, tap, type, open apps, run shell commands) for as long as the phone is reachable. There is no password, login or second factor in front of it. You are responsible for keeping it private.
 
 - **Treat it like a password.** Store it in a password manager. Don't paste it into chats, tickets, issues, commit messages, docs, screenshots or screen recordings, and never commit it to a repository. Don't open it in shared or untrusted browsers.
+- **An OAuth token is the same secret.** What your client stores after you authorize is exactly the session token a URL carries. Removing the connector from the client does not revoke it; use the steps below.
 - **Assume your AI client keeps it.** When you add the URL to ChatGPT, Claude, Mistral or any other client, that product stores it, and tool calls to it can be logged or visible to workspace admins. Only add it to accounts and workspaces you trust.
 - **Prefer to keep it narrow.** Share it with one client. Make a separate URL for each client or person so you can revoke one without breaking the others.
 - **If it may have leaked, revoke it right away:**
@@ -147,19 +156,42 @@ tailshell is provided **as is, without warranty of any kind**. It gives an AI ag
 
 ## 5. Use it in an AI client
 
-Use the **MCP URL** and set authentication to **none**. The URL itself is the credential. Menu names change often, so if a label differs, check the vendor's page.
+There are two ways to connect an AI client, and both stay available:
+
+| | Secret URL | OAuth |
+|---|---|---|
+| What you paste into the client | The **MCP URL** from step 4 (it contains the connection) | Just `https://<your-deployment>/mcp` |
+| Authentication setting | **None** | **OAuth**, with client ID and secret left empty |
+| Where you pair | On the home page, before you add the client | In the window the client opens, when you add it |
+| Works with | Any client that accepts a remote MCP URL | Clients that support MCP OAuth with dynamic client registration or client ID metadata documents |
+
+Menu names change often, so if a label differs, check the vendor's page.
+
+### Connecting with OAuth
+
+1. In your client, add a custom MCP server with the URL `https://<your-deployment>/mcp` and choose **OAuth**. Leave the client ID and client secret empty.
+2. The client opens a browser window with the tailshell page and a notice saying which app and address you will be sent back to. Only continue if you started this from that app.
+3. Either **pair the phone** as in step 4 (you'll see *Pair and authorize* instead of the URLs), or, if you already have a tailshell URL or token, paste it under **Already set up?** and press *Authorize with this*. If wireless debugging was toggled since then, enter the new connect port there too.
+4. You're sent back to the client, which now holds the connection. Nothing secret appears in the URL you typed.
+
+How it behaves:
+
+- The access token the client receives is the same session token a secret URL carries, so revoking works the same way (see [Safeguard your URLs](#safeguard-your-urls)). It has no expiry and there is no refresh token.
+- If the session can never recover (the `tailshell` machine was removed from your tailnet or its key expired), `/mcp` answers `401 invalid_token`, which makes the client ask you to authorize again. Temporary problems, such as the phone being asleep, come back as ordinary tool errors instead.
+- If wireless debugging is toggled and the port changes, authorize again and use the paste box with the new port. No pairing code is needed.
+- tailshell stores nothing for OAuth either: the client id, the authorization request and the authorization code are encrypted blobs, and codes are valid for five minutes. It supports dynamic client registration, client ID metadata documents (the client's `https` client ID is fetched from public addresses only, without following redirects) and PKCE (`S256`) for public clients, and does not support pre-registered client secrets.
 
 ### ChatGPT
 
 1. Open ChatGPT in a browser → **Settings → Apps & Connectors** (older builds: *Connectors*). Open **Advanced** and turn on **Developer mode** (on some builds this sits under *Security*).
-2. Choose **Create**, name it `tailshell`, paste the MCP URL, and set **Authentication: No authentication**. Confirm that you trust the unverified connector.
+2. Choose **Create** and name it `tailshell`. Then either paste the MCP URL and set **Authentication: No authentication**, or paste `https://<your-deployment>/mcp` and choose **OAuth** (see above). Confirm that you trust the unverified connector.
 3. In a new chat, enable the connector from the tools menu, then ask something like *"Take a look at my phone screen and tell me which apps are open."*
 
 Availability depends on your plan, and custom connectors are web-only on some plans; workspace admins may need to allow them. See [OpenAI's guide](https://developers.openai.com/api/docs/guides/custom-mcp-server).
 
 ### Claude (claude.ai and desktop)
 
-**Customize → Connectors → + → Add custom connector**, paste the MCP URL, and leave the OAuth fields empty. On Team and Enterprise plans an owner adds it for the organization. Details: [Anthropic's guide](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp).
+**Customize → Connectors → + → Add custom connector**, paste the MCP URL and leave the OAuth fields empty, or paste `https://<your-deployment>/mcp` to sign in with OAuth. On Team and Enterprise plans an owner adds it for the organization. Details: [Anthropic's guide](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp).
 
 ### Mistral Le Chat
 
@@ -238,6 +270,7 @@ Tool descriptions and server instructions are written for agents: they explain t
 | "cannot reach the phone" | Phone asleep, Tailscale off on the phone, or wireless debugging off | Wake the phone, check Tailscale and wireless debugging, then retry (the first call after idle can be slow) |
 | Works, then fails after you toggled wireless debugging | The connect port changed | Use **Wireless debugging port changed?** on the home page with your MCP URL and the new port. No pairing code is needed. Update the URL in your client |
 | Connected but "state offline" | A pairing dialog is open on the phone, or the pairing was removed | Close the dialog; if the paired device was forgotten, pair again |
+| The client keeps asking you to authorize, or errors with `invalid_token` | The `tailshell` machine was removed or its key expired, or `SEAL_SECRET` changed | Authorize again; with an old URL or token the paste box on the page is enough if the machine still exists, otherwise pair again with a fresh auth key |
 | Invalid URL / 401 | `SEAL_SECRET` was changed, or the URL was truncated | Create a new URL |
 | Can't rejoin the tailnet | The `tailshell` machine was deleted, or its key expired (about 180 days by default) | Create a new URL with a fresh auth key |
 | Slow or failed calls, and a **Duplicate node key** warning on the `tailshell` machine in Tailscale | Several requests ran at the same moment on different function instances, and each tried to use the node's single key | Run tool calls one at a time and retry. The warning normally clears once the overlap stops; if calls keep failing with "node key is in use elsewhere", remove the `tailshell` machine in Tailscale and create a new URL |
@@ -267,6 +300,9 @@ You can't recover a lost pairing without a new pairing code, and a new URL means
 | `tailx/` | Embedded Tailscale (tsnet) nodes from saved state |
 | `phone/` | The tool definitions and implementations shared by both transports |
 | `mcpx/`, `httpx/` | MCP and HTTP wrappers over `phone/` |
+| `plugin/` | Plugin package for directory listing: manifest, MCP declaration, logo, onboarding skill |
+| `docs/` | Screenshots, and the plugin submission checklist |
+| `oauthx/` | Stateless OAuth: discovery documents, client registration, authorization codes, token endpoint |
 
 Development:
 
@@ -286,14 +322,14 @@ tailshell stands on other people's work:
 | [Go](https://go.dev) | Language, standard library, runtime | BSD 3-Clause |
 | [Android platform-tools (`adb`)](https://developer.android.com/tools/adb) by Google | Pairing and controlling the phone. Downloaded from `dl.google.com` at runtime and never bundled in this repository | See Google's terms for the SDK platform-tools |
 | [Vercel](https://vercel.com) | Hosting, the Deploy Button and its button image (loaded from vercel.com) | Vercel's terms |
-| [Lucide](https://lucide.dev) | The `github`, `external-link` and `chevron-down` icons on the home page | ISC; portions derived from [Feather](https://feathericons.com) (MIT) |
+| [Lucide](https://lucide.dev) | The `github`, `external-link` and `chevron-down` icons on the home page, and the geometry of the branching tail in the logo, adapted from its `usb` icon | ISC; portions derived from [Feather](https://feathericons.com) (MIT) |
 | [Model Context Protocol](https://modelcontextprotocol.io) | The protocol the MCP endpoint implements | Specification |
 | [OpenAPI Specification](https://www.openapis.org) | The format of the generated `/openapi.json` | Specification |
 | [Mermaid](https://mermaid.js.org) | Diagrams in this README (rendered by GitHub; syntax checked with `mermaid-cli`) | MIT |
 | [Playwright](https://playwright.dev) (headless Chromium) and [ImageMagick](https://imagemagick.org) | Capturing and redacting the screenshots in `docs/screenshots/` | Apache-2.0 / ImageMagick License |
 
-The screenshots show the Android Settings app and the Tailscale app. Tailscale, Android, Google, GitHub, Vercel, ChatGPT, OpenAI, Claude, Anthropic and Mistral are trademarks of their respective owners. tailshell is an independent project and is not affiliated with or endorsed by any of them.
+The screenshots show the Android Settings app and the Tailscale app. Tailscale, Android, Google, GitHub, Vercel, USB (a mark of the USB Implementers Forum, which the logo alludes to without copying), ChatGPT, OpenAI, Claude, Anthropic and Mistral are trademarks of their respective owners. tailshell is an independent project and is not affiliated with or endorsed by any of them.
 
 ## License
 
-Not yet specified.
+MIT. See [LICENSE](LICENSE).

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "tailshell": {
+      "type": "streamable-http",
+      "url": "https://tailshell.vercel.app/mcp",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": { "mode": "dcr" },
+            "registrationUrl": "https://tailshell.vercel.app/oauth/register"
+          }
+        }
+      }
+    }
+  }
+}

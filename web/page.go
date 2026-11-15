@@ -6,6 +6,8 @@ const Page = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tailshell</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
 :root{
   --bg:#09090b; --surface:#18181b; --border:#27272a; --border-hi:#3f3f46;
@@ -23,6 +25,7 @@ const Page = `<!doctype html>
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Geist","Inter","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 main{max-width:600px;margin:0 auto;padding:56px 20px 80px}
 h1{font-size:20px;font-weight:600;letter-spacing:-.01em;margin:0}
+.mark{vertical-align:-6px;margin-right:9px;border-radius:7px}
 .top{display:flex;align-items:center;justify-content:space-between;margin:0 0 4px}
 .gh{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;font-size:13px;font-weight:500;border:1px solid var(--border);border-radius:6px;padding:5px 10px}
 .gh:hover{color:var(--text);border-color:var(--border-hi)}
@@ -68,7 +71,7 @@ summary{cursor:pointer;color:var(--muted);font-size:13px}
 <body>
 <main>
   <header class="top">
-    <h1>tailshell</h1>
+    <h1><img class="mark" src="https://raw.githubusercontent.com/theabbie/tailshell/master/plugin/assets/icon.png" height="25" alt="">tailshell</h1>
     <a class="gh" href="https://github.com/theabbie/tailshell" target="_blank" rel="noopener noreferrer" aria-label="tailshell on GitHub"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg><span>GitHub</span></a>
   </header>
   <p class="sub">Pair an Android phone over your tailnet and get an MCP URL for it.</p>
@@ -76,6 +79,23 @@ summary{cursor:pointer;color:var(--muted);font-size:13px}
   <div class="card" id="setup-card">
     <h2>Server</h2>
     <p id="setup-msg">Checking&hellip;</p>
+  </div>
+
+  <div class="card hide" id="oauth-card">
+    <h2>Authorize access</h2>
+    <p id="oauth-msg"></p>
+    <div class="row"><button id="oauth-cancel">Cancel</button></div>
+  </div>
+
+  <div class="card hide" id="existing-card">
+    <h2>Already set up?</h2>
+    <p>Paste a tailshell MCP URL, HTTP URL or token you already have, and it is handed back as is. No pairing needed.</p>
+    <label for="existing">URL or token</label>
+    <input id="existing" type="password" spellcheck="false" autocomplete="off">
+    <label for="existing-port">New connect port <span class="hint">(only if wireless debugging was toggled)</span></label>
+    <input id="existing-port" inputmode="numeric" placeholder="optional">
+    <div class="row"><button class="primary" id="existing-go">Authorize with this</button><span class="hint" id="existing-hint"></span></div>
+    <div class="err hide" id="existing-err"></div>
   </div>
 
   <div class="card" id="join-card">
@@ -138,7 +158,7 @@ summary{cursor:pointer;color:var(--muted);font-size:13px}
     <p class="warn">Treat these URLs like passwords. They contain the phone's adb key and your tailnet node identity, so anyone who has one can control the phone while it is reachable.</p>
   </div>
 
-  <div class="card">
+  <div class="card" id="port-card">
     <details style="margin:0">
       <summary>Wireless debugging port changed?</summary>
       <p style="margin-top:10px">Turning wireless debugging off and on changes its port. The pairing stays valid; paste your MCP URL and the new connect port to get an updated URL.</p>
@@ -151,12 +171,19 @@ summary{cursor:pointer;color:var(--muted);font-size:13px}
       <div class="url hide" id="upd-url" style="margin-top:12px"></div>
     </details>
   </div>
-  <footer class="foot">Open source &middot; <a href="https://github.com/theabbie/tailshell" target="_blank" rel="noopener noreferrer">View the code on GitHub <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></footer>
+  <footer class="foot">Open source &middot; <a href="https://github.com/theabbie/tailshell" target="_blank" rel="noopener noreferrer">View the code on GitHub <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a><br><a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a> &middot; <a href="/support">Support</a></footer>
 </main>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var state = "", chosen = null;
+  var OAUTH = /*TS_OAUTH*/null;
+  if (OAUTH) {
+    $("oauth-msg").textContent = (OAUTH.name || "An app") + " (" + OAUTH.host + ") wants to use one of your Android phones through tailshell. It will be able to see your screen, tap, swipe, type, press keys, open apps and links, and run shell commands. Join your tailnet and pair the phone below, and you will be sent back to " + OAUTH.host + ". Only continue if you started this from that app.";
+    show("oauth-card", true); show("existing-card", true); show("port-card", false);
+    $("pair").textContent = "Pair and authorize";
+    $("oauth-cancel").onclick = function () { window.location.assign(OAUTH.cancel); };
+  }
 
   function show(id, on) { $(id).classList.toggle("hide", !on); }
   function err(id, msg) { var e = $(id); e.textContent = msg || ""; show(id, !!msg); }
@@ -218,8 +245,10 @@ summary{cursor:pointer;color:var(--muted);font-size:13px}
       connectPort: parseInt($("cport").value, 10), pairPort: parseInt($("pport").value, 10), code: $("pcode").value.trim()
     };
     if (!body.connectPort || !body.pairPort || !body.code) { err("pair-err", "Fill in all three fields."); return; }
+    if (OAUTH) body.oauth = OAUTH.ctx;
     busy($("pair"), "pair-hint", true, "Pairing…");
     api("/api/pair", body).then(function (r) {
+      if (r.redirect) { window.location.assign(r.redirect); return; }
       $("mcpurl").textContent = r.url; $("httpurl").textContent = r.httpUrl; show("out-card", true); $("pcode").value = "";
       if (r.warning) err("pair-err", r.warning);
       $("out-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -234,6 +263,18 @@ summary{cursor:pointer;color:var(--muted);font-size:13px}
       });
     };
   }
+  $("existing-go").onclick = function () {
+    err("existing-err", "");
+    var v = $("existing").value.trim();
+    if (!v) { err("existing-err", "Paste a URL or token."); return; }
+    var body = { oauth: OAUTH.ctx, token: v };
+    var port = parseInt($("existing-port").value, 10);
+    if (port) body.port = port;
+    busy($("existing-go"), "existing-hint", true, "Checking\u2026");
+    api("/api/authorize", body).then(function (r) { window.location.assign(r.redirect); })
+      .catch(function (e) { err("existing-err", e.message); })
+      .then(function () { busy($("existing-go"), "existing-hint", false); });
+  };
   copier("copy", "mcpurl", "copy-hint");
   copier("copyhttp", "httpurl", "copyhttp-hint");
 

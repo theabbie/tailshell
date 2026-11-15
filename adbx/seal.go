@@ -281,3 +281,38 @@ func NetState(token string) ([]byte, error) {
 	}
 	return s.Net, nil
 }
+
+// ErrReauth marks failures that retrying cannot fix: the saved identity is gone
+// (the tailshell machine was removed or its key expired), so the caller must
+// authorize again.
+var ErrReauth = errors.New("authorization is no longer valid")
+
+// SealBytes encrypts plain for one purpose. Different labels derive different
+// keys, so a blob sealed for one purpose cannot be opened as another.
+func SealBytes(label string, plain []byte) (string, error) {
+	gcm, err := newGCM(label)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(gcm.Seal(nonce, nonce, plain, nil)), nil
+}
+
+func OpenBytes(label, token string) ([]byte, error) {
+	gcm, err := newGCM(label)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(token))
+	if err != nil || len(raw) < gcm.NonceSize() {
+		return nil, errors.New("invalid token")
+	}
+	plain, err := gcm.Open(nil, raw[:gcm.NonceSize()], raw[gcm.NonceSize():], nil)
+	if err != nil {
+		return nil, errors.New("invalid token")
+	}
+	return plain, nil
+}
