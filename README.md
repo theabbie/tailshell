@@ -193,13 +193,11 @@ How it behaves:
 
 Availability depends on your plan, and custom connectors are web-only on some plans; workspace admins may need to allow them. See [OpenAI's guide](https://developers.openai.com/api/docs/guides/custom-mcp-server).
 
-**Plugin archive.** Each [release](https://github.com/theabbie/tailshell/releases) carries `tailshell-plugin-<version>.zip`, the contents of `plugin/` with the manifest at the archive root. It lists the server but ChatGPT does not show a connect prompt for a plugin installed from a ZIP, so as shipped it cannot sign in. To use a ZIP plugin, give it your own URL:
+**Plugin packaging.** The repo is also a plugin source, but plugins and custom MCP servers connect differently, so pick by where you use ChatGPT:
 
-1. Pair your phone on your deployment and copy the MCP URL (`https://<your-deployment>/mcp/<token>`). It is a secret, so keep the edited ZIP private.
-2. In the ZIP, open `mcp.json`, set `url` to that MCP URL, and delete the `extensions` block under the server (no OAuth is needed because the token is in the URL).
-3. Save the ZIP and upload it as a plugin in ChatGPT.
-
-Without a ZIP, add the MCP URL or `https://<your-deployment>/mcp` as a custom MCP server instead (see ChatGPT below).
+- **ChatGPT on the web:** add the MCP server directly (above). Choose **OAuth** and **Create as a plugin** to get an installable plugin with the sign-in prompt.
+- **ChatGPT desktop app and Codex:** add this repo as a plugin marketplace with `codex plugin marketplace add theabbie/tailshell` (the desktop app reads the same `.agents/plugins/marketplace.json`), then install `tailshell`. The marketplace entry asks to authenticate on install. It points at `https://tailshell.vercel.app/mcp`; change the URL in `plugin/mcp.json` to use your own deployment.
+- **Release ZIP:** each [release](https://github.com/theabbie/tailshell/releases) carries `tailshell-plugin-<version>.zip`, built for OpenAI's plugin directory submission (see [docs/SUBMISSION.md](docs/SUBMISSION.md)). Installing it by uploading it as a private plugin does not work: ChatGPT lists the server but never connects to it or shows a sign-in prompt, because a ZIP has no registered connection. Use one of the options above instead.
 
 ### Claude (claude.ai and desktop)
 
@@ -313,6 +311,7 @@ You can't recover a lost pairing without a new pairing code, and a new URL means
 | `phone/` | The tool definitions and implementations shared by both transports |
 | `mcpx/`, `httpx/` | MCP and HTTP wrappers over `phone/` |
 | `plugin/` | Plugin package for directory listing: manifest, MCP declaration, logo, onboarding skill |
+| `.agents/plugins/` | Marketplace file that lets Codex and the ChatGPT desktop app install `plugin/` from this repo |
 | `docs/` | Screenshots, and the plugin submission checklist |
 | `oauthx/` | Stateless OAuth: discovery documents, client registration, authorization codes, token endpoint |
 
