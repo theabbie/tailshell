@@ -127,7 +127,7 @@ func serve(w http.ResponseWriter, r *http.Request, token string, resolve adbx.Di
 		if len(q.ID) == 0 {
 			continue
 		}
-		resp, again := handle(r.Context(), q, token, resolve)
+		resp, again := handle(context.WithValue(r.Context(), baseKey{}, baseURL(r)), q, token, resolve)
 		reauth = reauth || again
 		out = append(out, resp)
 	}
@@ -141,6 +141,30 @@ func serve(w http.ResponseWriter, r *http.Request, token string, resolve adbx.Di
 		return
 	}
 	writeResp(w, out, batch)
+}
+
+type baseKey struct{}
+
+func baseURL(r *http.Request) string {
+	scheme := "https"
+	if p := r.Header.Get("X-Forwarded-Proto"); p != "" {
+		scheme = p
+	} else if r.TLS == nil && strings.HasPrefix(r.Host, "localhost") {
+		scheme = "http"
+	}
+	return scheme + "://" + r.Host
+}
+
+func serverInfo(ctx context.Context) map[string]any {
+	info := map[string]any{"name": "tailshell", "title": "tailshell", "version": "1.0.0"}
+	if base, _ := ctx.Value(baseKey{}).(string); base != "" {
+		info["websiteUrl"] = base
+		info["icons"] = []map[string]any{
+			{"src": base + "/apple-touch-icon.png", "mimeType": "image/png", "sizes": []string{"180x180"}},
+			{"src": base + "/logo.svg", "mimeType": "image/svg+xml", "sizes": []string{"any"}},
+		}
+	}
+	return info
 }
 
 func writeResp(w http.ResponseWriter, rs []rpcResp, batch bool) {
@@ -182,7 +206,7 @@ func handle(ctx context.Context, q rpcReq, token string, resolve adbx.DialResolv
 		resp.Result = map[string]any{
 			"protocolVersion": ver,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
-			"serverInfo":      map[string]string{"name": "tailshell", "version": "1.0.0"},
+			"serverInfo":      serverInfo(ctx),
 			"instructions":    instructions,
 		}
 	case "ping":

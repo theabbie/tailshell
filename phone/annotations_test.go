@@ -16,6 +16,14 @@ func TestAnnotationsAreConsistent(t *testing.T) {
 	}
 }
 
+func TestActingToolsAreOpenWorld(t *testing.T) {
+	for _, tool := range Tools {
+		if !tool.ReadOnly && !tool.OpenWorld {
+			t.Errorf("%s acts on a phone running arbitrary apps, so it is open-world", tool.Name)
+		}
+	}
+}
+
 func TestShellToolIsPresent(t *testing.T) {
 	if _, ok := Find("phone_shell"); !ok {
 		t.Fatal("phone_shell must stay available")
