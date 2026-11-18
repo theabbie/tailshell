@@ -19,7 +19,7 @@ Status: **not submitted.** This tracks OpenAI's [submission requirements](https:
 | Errors that say what went wrong and what to do | `phone/phone.go`, `tailx/` |
 | No credentials or secrets in the package | `plugin/` |
 
-Annotation choices: tap, swipe, type, key and shell are marked destructive because they can trigger irreversible actions; opening an app or a link is not. Only `phone_open_url` is open-world.
+Annotation choices: tap, swipe, type, key, shell and socket are marked destructive because they can trigger irreversible actions; opening an app or a link is not. Every tool that acts on the phone is marked open-world, because it works on whatever app or service is on the other end (the portal's scan flagged tap, key and shell otherwise). Screenshot, ui, info and list apps are read-only.
 
 ## Needs the publisher
 

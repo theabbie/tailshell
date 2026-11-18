@@ -290,6 +290,36 @@ Set `ADDR` to change the listen address (for example `ADDR=0.0.0.0:8080`). Open 
 | `phone_open_url` | `/open_url` | Open an http(s) link |
 | `phone_list_apps` | `/list_apps` | Find installed package names |
 | `phone_shell` | `/shell` | Run an `adb shell` command (limited shell user) |
+| `phone_socket` | `/socket` | Send one request to a socket or port on the phone itself and return the reply, e.g. Chrome's DevTools |
+
+### Talking to a local socket (Chrome DevTools)
+
+`adb shell` runs as a restricted user that Android's SELinux policy keeps away from other apps' sockets, but the adb daemon itself may open them (that is how `adb forward` works). `phone_socket` asks the daemon to open `localabstract:NAME`, `localfilesystem:/PATH` or `tcp:PORT` on the phone, sends one request, returns the reply and closes. No forward or port is created, and nothing stays connected.
+
+Pick one of three modes per call: `http_path` (one HTTP request), `websocket_path` with `messages` (text frames, returns the frames received) or `send` (raw text).
+
+Example, Chrome on Android, over the HTTP API (`POST /socket` with a JSON body):
+
+```json
+{"target": "localabstract:chrome_devtools_remote", "http_path": "/json"}
+```
+
+lists the open tabs with their ids, and
+
+```json
+{"target": "localabstract:chrome_devtools_remote",
+ "websocket_path": "/devtools/page/<id>",
+ "messages": ["{\"id\":1,\"method\":\"Runtime.evaluate\",\"params\":{\"expression\":\"document.title\"}}"]}
+```
+
+runs JavaScript in that tab and returns the result. The same arguments work through the MCP tool.
+
+Things to know:
+
+- This reads and controls the browser itself: page contents, cookies and logged-in sessions. Treat it like the shell tool, and use it only on tabs the task needs.
+- Chrome must be running and USB debugging must be on, which is the same condition as for `adb forward` (tested on one phone, Chrome 157, Android 15).
+- Chrome on Android may refuse to create a new tab (`/json/new` answers `Could not create new page`); working with existing tabs is reliable.
+- Each call is independent: it connects, sends, reads, closes. Debugger state such as breakpoints does not persist between calls.
 
 Tool descriptions and server instructions are written for agents: they explain the workflow (look, act, verify), the coordinate system, and what to do if the screen is locked.
 

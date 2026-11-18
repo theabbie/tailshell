@@ -82,6 +82,20 @@ var Tools = []Tool{
 	{Name: "phone_list_apps", Title: "List installed apps", ReadOnly: true,
 		Schema:      schema(map[string]any{"filter": str("optional substring to match")}),
 		Description: "List the package names of user-installed apps, optionally filtered by a case-insensitive substring (e.g. \"google\", \"bank\", \"maps\"). Use it to find the package name for phone_open_app."},
+	{Name: "phone_socket", Destructive: true, OpenWorld: true, Title: "Talk to a local socket on the phone",
+		Schema: schema(map[string]any{
+			"target":         str("what to connect to on the phone: localabstract:NAME, localfilesystem:/PATH or tcp:PORT (a port on the phone's own loopback)"),
+			"http_path":      str("send one HTTP request with this path (e.g. /json/version) and return the status and body"),
+			"http_method":    str("HTTP method for http_path, default GET"),
+			"http_body":      str("request body for http_path"),
+			"websocket_path": str("open a WebSocket on this path, send each of messages as a text frame, and return the frames received"),
+			"messages":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "text frames to send when websocket_path is set (JSON strings, e.g. Chrome DevTools commands)"},
+			"send":           str("raw text to write instead, for any other protocol; the reply is read until the socket is quiet"),
+			"wait_ms":        num("how long to keep listening after the last message or byte, default 1500"),
+			"timeout_ms":     num("overall limit, default 10000, max 30000"),
+			"max_bytes":      num("response cap, default 60000, max 200000"),
+		}, "target"),
+		Description: "Connect straight to a socket on the phone, send one request, return the response and close. Use it for local services that adb shell cannot reach, because the connection is opened by the adb daemon. Set exactly one of http_path, websocket_path or send. Example, Chrome's DevTools on Android (target localabstract:chrome_devtools_remote): http_path=/json lists the open tabs with their ids; websocket_path=/devtools/page/<id> with messages=[\"{\\\"id\\\":1,\\\"method\\\":\\\"Runtime.evaluate\\\",\\\"params\\\":{\\\"expression\\\":\\\"document.title\\\"}}\"] runs JavaScript in that tab. Side effects: it can read and change anything the target service exposes; for Chrome that includes page contents, cookies and logged-in sessions, so only touch the tabs the user asked about. Nothing stays connected after the call."},
 	{Name: "phone_shell", Destructive: true, OpenWorld: true, Title: "Shell command",
 		Schema:      schema(map[string]any{"command": str("shell command to run")}, "command"),
 		Description: "Run a command in the phone's adb shell (limited shell user, not root). A last resort for things the other tools cannot do, e.g. dumpsys battery, settings get global airplane_mode_on, am start ... . 45s timeout, output capped at 60 KB, no interactive programs. Do not run destructive commands (rm, pm uninstall/clear, settings put, reboot) unless the user explicitly asked. Side effect: whatever the command does to the phone and its files."},
@@ -159,6 +173,10 @@ func Call(ctx context.Context, token string, resolve adbx.DialResolver, name str
 		if strings.TrimSpace(gets("command")) == "" {
 			return fail(400, "command is required")
 		}
+	case "phone_socket":
+		if _, _, msg := parseSocketArgs(a); msg != "" {
+			return fail(400, msg)
+		}
 	}
 
 	c, err := adbx.Attach(ctx, token, resolve)
@@ -184,6 +202,21 @@ func Call(ctx context.Context, token string, resolve adbx.DialResolver, name str
 	}
 
 	switch name {
+	case "phone_socket":
+		target, req, _ := parseSocketArgs(a)
+		conn, err := c.Stream(ctx, target)
+		if err != nil {
+			return fail(502, "could not open "+target+" on the phone: "+err.Error())
+		}
+		defer conn.Close()
+		text, data, err := socketSession(conn, req)
+		if err != nil {
+			return Result{Text: strings.TrimSpace(text + "\n(error: " + err.Error() + ")"), IsError: true}
+		}
+		if text == "" {
+			text = "(no response)"
+		}
+		return Result{Text: text, Data: data}
 	case "phone_screenshot":
 		png, err := c.Screenshot(ctx)
 		if err != nil {

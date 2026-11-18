@@ -272,3 +272,43 @@ func (c *Client) Screenshot(ctx context.Context) ([]byte, error) {
 	}
 	return out, nil
 }
+
+// Stream opens a raw byte stream to a service on the phone through the adb
+// server, e.g. "localabstract:chrome_devtools_remote". It is what adb forward
+// does behind a local port, without needing the port.
+func (c *Client) Stream(ctx context.Context, service string) (net.Conn, error) {
+	d := net.Dialer{Timeout: 5 * time.Second}
+	conn, err := d.DialContext(ctx, "tcp", fmt.Sprintf("127.0.0.1:%d", c.e.port))
+	if err != nil {
+		return nil, err
+	}
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	defer stop()
+	for _, req := range []string{"host:transport:" + c.serial, service} {
+		if _, err := fmt.Fprintf(conn, "%04x%s", len(req), req); err != nil {
+			conn.Close()
+			return nil, err
+		}
+		status := make([]byte, 4)
+		if _, err := io.ReadFull(conn, status); err != nil {
+			conn.Close()
+			return nil, err
+		}
+		if string(status) != "OKAY" {
+			msg := "adb refused the request"
+			if string(status) == "FAIL" {
+				hdr := make([]byte, 4)
+				if _, err := io.ReadFull(conn, hdr); err == nil {
+					var n int
+					fmt.Sscanf(string(hdr), "%x", &n)
+					body := make([]byte, min(n, 512))
+					io.ReadFull(conn, body)
+					msg = string(body)
+				}
+			}
+			conn.Close()
+			return nil, errors.New(msg)
+		}
+	}
+	return conn, nil
+}
